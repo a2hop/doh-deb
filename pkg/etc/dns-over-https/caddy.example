@@ -1,0 +1,13 @@
+# Example Caddy reverse proxy configuration for doh-server
+
+doh.example.com {
+    reverse_proxy /dns-query* localhost:8053
+    tls your@email.address
+    
+    header {
+        Strict-Transport-Security "max-age=63072000"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+    }
+}

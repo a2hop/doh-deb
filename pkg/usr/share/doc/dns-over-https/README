@@ -1,0 +1,29 @@
+DNS-over-HTTPS Debian Package
+==============================
+
+This package provides DNS-over-HTTPS client and server implementation.
+
+Components:
+-----------
+- doh-client: Local DNS proxy that queries upstream DoH servers
+- doh-server: DoH server that forwards to traditional DNS servers
+
+Quick Start:
+------------
+
+For DoH Client (most common use case):
+  1. Disable systemd-resolved: sudo doh-resolve disable
+  2. Configure client: sudo nano /etc/dns-over-https/doh-client.conf
+  3. Start service: sudo systemctl start doh-client
+  4. Test: dig @127.0.0.1 google.com
+
+For DoH Server:
+  1. Configure server: sudo nano /etc/dns-over-https/doh-server.conf
+  2. Set up reverse proxy (Apache/Nginx/Caddy)
+  3. Start service: sudo systemctl start doh-server
+
+Documentation:
+--------------
+See /usr/share/doc/dns-over-https/README.md for complete documentation.
+
+Upstream: https://github.com/m13253/dns-over-https

@@ -1,0 +1,41 @@
+# Example Nginx reverse proxy configuration for doh-server
+
+server {
+    listen       443 ssl http2 default_server;
+    listen       [::]:443 ssl http2 default_server;
+    server_name  doh.example.com;
+
+    server_tokens off;
+
+    # TLS Configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
+    ssl_ecdh_curve secp384r1;
+    ssl_session_timeout  10m;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+    
+    # OCSP Stapling (required for DoH)
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    
+    # SSL Certificates (replace with your own)
+    ssl_certificate /etc/letsencrypt/live/doh.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/doh.example.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/doh.example.com/chain.pem;
+
+    # Security Headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=63072000" always;
+
+    # DoH endpoint
+    location /dns-query {
+        proxy_pass       http://127.0.0.1:8053/dns-query;
+        proxy_set_header Host      $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}

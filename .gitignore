@@ -1,6 +1,6 @@
 # Build artifacts
 *.deb
-dns-over-https/
+/dns-over-https/
 *.tar.gz
 *.tgz
 

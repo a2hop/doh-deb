@@ -1,0 +1,35 @@
+# Example Apache reverse proxy configuration for doh-server
+
+<VirtualHost *:443>
+    ServerName doh.example.com
+    
+    # HTTP/2 support
+    Protocols h2 http/1.1
+    
+    # SSL Configuration
+    SSLEngine on
+    SSLProtocol TLSv1.2 TLSv1.3
+    SSLHonorCipherOrder On
+    SSLCipherSuite ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:!aNULL:!MD5:!DSS
+    
+    # SSL Certificates (replace with your own)
+    SSLCertificateFile /etc/letsencrypt/live/doh.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/doh.example.com/privkey.pem
+    
+    # OCSP Stapling (required for DoH)
+    SSLUseStapling on
+    SSLStaplingCache shmcb:/var/lib/apache2/stapling_cache(512000)
+    
+    # Security Headers
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Strict-Transport-Security "max-age=63072000"
+    
+    # DoH endpoint
+    ProxyPass /dns-query http://127.0.0.1:8053/dns-query
+    ProxyPassReverse /dns-query http://127.0.0.1:8053/dns-query
+    
+    # Enable required Apache modules:
+    # a2enmod ssl proxy proxy_http http2 headers
+</VirtualHost>

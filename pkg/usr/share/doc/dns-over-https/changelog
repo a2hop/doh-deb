@@ -1,0 +1,10 @@
+dns-over-https (1.0.0) unstable; urgency=low
+
+  * Initial Debian package release
+  * Includes doh-client and doh-server binaries
+  * Systemd service integration
+  * Intelligent upgrade handling
+  * systemd-resolved conflict resolution
+  * CLI management utilities
+
+ -- DNS-over-HTTPS Package Maintainer <maintainer@example.com>  Tue, 05 Nov 2025 00:00:00 +0000
