@@ -1,0 +1,17 @@
+Package: ut--dns-over-https
+Version: 1.0.0
+Architecture: amd64
+Maintainer: DNS-over-HTTPS Package Maintainer <maintainer@example.com>
+Homepage: https://github.com/m13253/dns-over-https
+Depends: systemd
+Suggests: curl, jq, apache2 | nginx | caddy
+Description: High performance DNS over HTTPS client & server
+ DNS-over-HTTPS is a client and server implementation of DNS over HTTPS (DoH).
+ It supports both Google's and IETF's DNS-over-HTTPS protocols (RFC 8484).
+ .
+ Features:
+  - doh-client: Local DNS proxy that queries upstream DoH servers
+  - doh-server: DoH server that forwards to traditional DNS servers
+  - EDNS0-Client-Subnet support for GeoDNS
+  - DNSSEC compatible
+  - High performance with HTTP/2 support

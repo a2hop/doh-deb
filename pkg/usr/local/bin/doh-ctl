@@ -1,0 +1,222 @@
+#!/bin/bash
+# doh-ctl - Control and manage DNS-over-HTTPS services
+#
+# Usage:
+#   doh-ctl client start       - Start doh-client service
+#   doh-ctl client stop        - Stop doh-client service
+#   doh-ctl client restart     - Restart doh-client service
+#   doh-ctl client status      - Show client status
+#   doh-ctl client logs        - Show client logs
+#   doh-ctl client follow      - Follow client logs
+#   doh-ctl server start       - Start doh-server service
+#   doh-ctl server stop        - Stop doh-server service
+#   doh-ctl server restart     - Restart doh-server service
+#   doh-ctl server status      - Show server status
+#   doh-ctl server logs        - Show server logs
+#   doh-ctl server follow      - Follow server logs
+#   doh-ctl status             - Show both services status
+#   doh-ctl test               - Test DNS resolution
+#   doh-ctl config client      - Show client configuration
+#   doh-ctl config server      - Show server configuration
+#   doh-ctl resolve status     - Check systemd-resolved status
+#   doh-ctl resolve disable    - Disable systemd-resolved
+#   doh-ctl resolve enable     - Enable systemd-resolved
+#   doh-ctl help               - Show this help
+
+set -e
+
+CLIENT_CONF="/etc/dns-over-https/doh-client.conf"
+SERVER_CONF="/etc/dns-over-https/doh-server.conf"
+
+show_help() {
+    grep "^# " "$0" | grep -v "^#!" | sed 's/^# *//'
+}
+
+require_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Error: This command requires root privileges"
+        exit 1
+    fi
+}
+
+# Service control functions
+start_client() {
+    require_root
+    echo "Starting doh-client..."
+    systemctl start doh-client
+    sleep 1
+    systemctl status doh-client --no-pager || true
+}
+
+stop_client() {
+    require_root
+    echo "Stopping doh-client..."
+    systemctl stop doh-client
+    echo "✓ doh-client stopped"
+}
+
+restart_client() {
+    require_root
+    echo "Restarting doh-client..."
+    systemctl restart doh-client
+    sleep 1
+    systemctl status doh-client --no-pager || true
+}
+
+status_client() {
+    systemctl status doh-client --no-pager || true
+}
+
+logs_client() {
+    journalctl -u doh-client -n 50 --no-pager
+}
+
+follow_client() {
+    journalctl -u doh-client -f
+}
+
+start_server() {
+    require_root
+    echo "Starting doh-server..."
+    systemctl start doh-server
+    sleep 1
+    systemctl status doh-server --no-pager || true
+}
+
+stop_server() {
+    require_root
+    echo "Stopping doh-server..."
+    systemctl stop doh-server
+    echo "✓ doh-server stopped"
+}
+
+restart_server() {
+    require_root
+    echo "Restarting doh-server..."
+    systemctl restart doh-server
+    sleep 1
+    systemctl status doh-server --no-pager || true
+}
+
+status_server() {
+    systemctl status doh-server --no-pager || true
+}
+
+logs_server() {
+    journalctl -u doh-server -n 50 --no-pager
+}
+
+follow_server() {
+    journalctl -u doh-server -f
+}
+
+show_status() {
+    echo "=== doh-client ==="
+    systemctl status doh-client --no-pager || true
+    echo ""
+    echo "=== doh-server ==="
+    systemctl status doh-server --no-pager || true
+}
+
+test_dns() {
+    echo "Testing DNS resolution..."
+    echo ""
+    
+    if ! command -v dig &> /dev/null; then
+        echo "Error: 'dig' command not found. Install dnsutils package:"
+        echo "  sudo apt install dnsutils"
+        exit 1
+    fi
+    
+    echo "Query via localhost (doh-client):"
+    dig @127.0.0.1 google.com +short || echo "Failed to query localhost"
+    echo ""
+    
+    echo "Query details:"
+    dig @127.0.0.1 google.com || echo "Failed to query localhost"
+}
+
+show_client_config() {
+    if [ -f "$CLIENT_CONF" ]; then
+        echo "=== doh-client configuration ==="
+        echo "File: $CLIENT_CONF"
+        echo ""
+        cat "$CLIENT_CONF"
+    else
+        echo "Error: Client configuration not found at $CLIENT_CONF"
+        exit 1
+    fi
+}
+
+show_server_config() {
+    if [ -f "$SERVER_CONF" ]; then
+        echo "=== doh-server configuration ==="
+        echo "File: $SERVER_CONF"
+        echo ""
+        cat "$SERVER_CONF"
+    else
+        echo "Error: Server configuration not found at $SERVER_CONF"
+        exit 1
+    fi
+}
+
+resolve_status() {
+    doh-resolve status
+}
+
+resolve_disable() {
+    require_root
+    doh-resolve disable
+}
+
+resolve_enable() {
+    require_root
+    doh-resolve enable
+}
+
+# Main command dispatcher
+case "${1:-}" in
+    client)
+        case "${2:-}" in
+            start) start_client ;;
+            stop) stop_client ;;
+            restart) restart_client ;;
+            status) status_client ;;
+            logs) logs_client ;;
+            follow) follow_client ;;
+            *) echo "Unknown client command: ${2:-}"; show_help; exit 1 ;;
+        esac
+        ;;
+    server)
+        case "${2:-}" in
+            start) start_server ;;
+            stop) stop_server ;;
+            restart) restart_server ;;
+            status) status_server ;;
+            logs) logs_server ;;
+            follow) follow_server ;;
+            *) echo "Unknown server command: ${2:-}"; show_help; exit 1 ;;
+        esac
+        ;;
+    status) show_status ;;
+    test) test_dns ;;
+    config)
+        case "${2:-}" in
+            client) show_client_config ;;
+            server) show_server_config ;;
+            *) echo "Specify 'client' or 'server'"; exit 1 ;;
+        esac
+        ;;
+    resolve)
+        case "${2:-}" in
+            status) resolve_status ;;
+            disable) resolve_disable ;;
+            enable) resolve_enable ;;
+            *) echo "Unknown resolve command: ${2:-}"; show_help; exit 1 ;;
+        esac
+        ;;
+    help|--help|-h) show_help ;;
+    *) echo "Unknown command: ${1:-}"; show_help; exit 1 ;;
+esac
+
+exit 0

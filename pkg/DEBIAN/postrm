@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+# This script runs after the package is removed
+
+if [ "$1" = "remove" ]; then
+    echo "Cleaning up DNS-over-HTTPS..."
+    systemctl daemon-reload || true
+    echo "✓ Systemd daemon reloaded"
+fi
+
+if [ "$1" = "purge" ]; then
+    echo "Purging DNS-over-HTTPS configuration..."
+    
+    # Remove configuration directory
+    if [ -d /etc/dns-over-https ]; then
+        rm -rf /etc/dns-over-https || true
+        echo "✓ Configuration directory removed"
+    fi
+    
+    # Remove doh user
+    if id doh &>/dev/null 2>&1; then
+        userdel doh || true
+        echo "✓ DNS-over-HTTPS system user removed"
+    fi
+fi
+
+#DEBHELPER#
+exit 0

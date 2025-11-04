@@ -1,0 +1,19 @@
+[Unit]
+Description=DNS-over-HTTPS Server
+Documentation=https://github.com/m13253/dns-over-https
+After=network.target
+
+[Service]
+PermissionsStartOnly=true
+LimitNOFILE=1048576
+LimitNPROC=1048576
+NoNewPrivileges=true
+User=doh
+WorkingDirectory=/etc/dns-over-https
+ExecStart=/usr/local/bin/doh-server -conf /etc/dns-over-https/doh-server.conf
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

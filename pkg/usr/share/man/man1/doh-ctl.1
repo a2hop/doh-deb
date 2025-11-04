@@ -1,0 +1,120 @@
+.TH DOH-CTL 1 "November 2025" "dns-over-https 1.0.0" "User Commands"
+.SH NAME
+doh-ctl \- control and manage DNS-over-HTTPS services
+.SH SYNOPSIS
+.B doh-ctl
+.I COMMAND
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B doh-ctl
+is a utility for controlling and managing DNS-over-HTTPS client and server services.
+It provides convenient commands for starting, stopping, monitoring, and testing
+both doh-client and doh-server services.
+.SH COMMANDS
+.SS Client Commands
+.TP
+.B client start
+Start the doh-client service
+.TP
+.B client stop
+Stop the doh-client service
+.TP
+.B client restart
+Restart the doh-client service
+.TP
+.B client status
+Show doh-client service status
+.TP
+.B client logs
+Show recent doh-client logs (last 50 lines)
+.TP
+.B client follow
+Follow doh-client logs in real-time
+.SS Server Commands
+.TP
+.B server start
+Start the doh-server service
+.TP
+.B server stop
+Stop the doh-server service
+.TP
+.B server restart
+Restart the doh-server service
+.TP
+.B server status
+Show doh-server service status
+.TP
+.B server logs
+Show recent doh-server logs (last 50 lines)
+.TP
+.B server follow
+Follow doh-server logs in real-time
+.SS General Commands
+.TP
+.B status
+Show status of both client and server services
+.TP
+.B test
+Test DNS resolution via localhost
+.TP
+.B config client
+Display client configuration file
+.TP
+.B config server
+Display server configuration file
+.TP
+.B resolve status
+Check systemd-resolved status
+.TP
+.B resolve disable
+Disable systemd-resolved stub listener (requires root)
+.TP
+.B resolve enable
+Enable systemd-resolved stub listener (requires root)
+.TP
+.B help
+Display help message
+.SH EXAMPLES
+.PP
+Start the DNS-over-HTTPS client:
+.RS
+sudo doh-ctl client start
+.RE
+.PP
+View client logs:
+.RS
+doh-ctl client logs
+.RE
+.PP
+Test DNS resolution:
+.RS
+doh-ctl test
+.RE
+.PP
+Disable systemd-resolved to free port 53:
+.RS
+sudo doh-ctl resolve disable
+.RE
+.SH FILES
+.TP
+.I /etc/dns-over-https/doh-client.conf
+Client configuration file
+.TP
+.I /etc/dns-over-https/doh-server.conf
+Server configuration file
+.TP
+.I /etc/systemd/system/doh-client.service
+Client systemd service file
+.TP
+.I /etc/systemd/system/doh-server.service
+Server systemd service file
+.SH SEE ALSO
+.BR doh-resolve (1),
+.BR systemctl (1),
+.BR journalctl (1)
+.PP
+Project homepage: https://github.com/m13253/dns-over-https
+.SH AUTHOR
+Package maintained by DNS-over-HTTPS Package Maintainer
+.br
+Upstream author: Star Brilliant <m13253@hotmail.com>

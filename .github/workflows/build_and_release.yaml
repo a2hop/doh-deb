@@ -1,0 +1,314 @@
+name: Build and Release DNS-over-HTTPS Debian Package
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deb_version'
+      - 'pkg/**'
+      - '.github/workflows/build_and_release.yaml'
+  workflow_dispatch:
+
+jobs:
+  check_release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: |
+          DEB_VERSION=$(cat deb_version)
+          echo "version=${DEB_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view v${{ steps.version.outputs.version }} &>/dev/null; then
+            echo "Release v${{ steps.version.outputs.version }} already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release v${{ steps.version.outputs.version }} does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check_release
+    if: needs.check_release.outputs.release_exists == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, armv7]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: |
+          DEB_VERSION=$(cat deb_version)
+          echo "version=${DEB_VERSION}" >> $GITHUB_OUTPUT
+          echo "Package version: ${DEB_VERSION}"
+
+      - name: Update control file version
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -i "s/^Version: .*/Version: ${DEB_VERSION}/" pkg/DEBIAN/control
+          echo "Control file version updated to: ${DEB_VERSION}"
+          grep "^Version:" pkg/DEBIAN/control
+
+      - name: Detect latest DNS-over-HTTPS version
+        id: doh
+        run: |
+          # Get latest dns-over-https release version
+          DOH_VERSION=$(curl -s https://api.github.com/repos/m13253/dns-over-https/releases/latest | grep tag_name | cut -d'"' -f4 | sed 's/^v//')
+          echo "version=${DOH_VERSION}" >> $GITHUB_OUTPUT
+          echo "DNS-over-HTTPS version: ${DOH_VERSION}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build DNS-over-HTTPS binaries
+        env:
+          DOH_VERSION: ${{ steps.doh.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # Map GitHub architecture names to Go GOARCH
+          case "$ARCH" in
+            amd64)
+              GOARCH="amd64"
+              ;;
+            arm64)
+              GOARCH="arm64"
+              ;;
+            armv7)
+              GOARCH="arm"
+              GOARM="7"
+              export GOARM
+              ;;
+            *)
+              echo "Unknown architecture: $ARCH"
+              exit 1
+              ;;
+          esac
+
+          echo "Building for GOOS=linux GOARCH=${GOARCH}"
+
+          # Clone and build dns-over-https
+          git clone --depth 1 --branch v${DOH_VERSION} https://github.com/m13253/dns-over-https.git
+          cd dns-over-https
+
+          # Build client
+          echo "Building doh-client..."
+          cd doh-client
+          GOOS=linux GOARCH=${GOARCH} go build -ldflags="-s -w" -o ../../doh-client
+          cd ..
+
+          # Build server
+          echo "Building doh-server..."
+          cd doh-server
+          GOOS=linux GOARCH=${GOARCH} go build -ldflags="-s -w" -o ../../doh-server
+          cd ..
+
+          cd ..
+
+          # Verify binaries exist
+          if [ ! -f doh-client ] || [ ! -f doh-server ]; then
+            echo "Failed to build DNS-over-HTTPS binaries"
+            exit 1
+          fi
+
+          # Make binaries executable and move to package
+          chmod +x doh-client doh-server
+          mkdir -p pkg/usr/local/bin
+          cp doh-client pkg/usr/local/bin/
+          cp doh-server pkg/usr/local/bin/
+          echo "DNS-over-HTTPS binaries installed successfully"
+
+          # Show binary info
+          ls -lh pkg/usr/local/bin/doh-*
+          file pkg/usr/local/bin/doh-client
+          file pkg/usr/local/bin/doh-server
+
+      - name: Set script permissions
+        run: |
+          # Set permissions for maintainer scripts (DEBIAN control files)
+          chmod 755 pkg/DEBIAN/postinst
+          chmod 755 pkg/DEBIAN/prerm
+          chmod 755 pkg/DEBIAN/postrm
+          
+          # Set permissions for CLI utilities
+          chmod 755 pkg/usr/local/bin/doh-ctl
+          chmod 755 pkg/usr/local/bin/doh-resolve
+          
+          # Set permissions for control file
+          chmod 644 pkg/DEBIAN/control
+          
+          echo "All permissions set correctly"
+          ls -la pkg/DEBIAN/
+
+      - name: Create Debian package
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # Set architecture in control file
+          sed -i "s/Architecture: .*/Architecture: ${ARCH}/" pkg/DEBIAN/control
+
+          # Create the .deb package
+          dpkg-deb --build pkg dns-over-https_${DEB_VERSION}_${ARCH}.deb
+
+          # Verify package
+          if [ ! -f "dns-over-https_${DEB_VERSION}_${ARCH}.deb" ]; then
+            echo "Failed to create Debian package"
+            exit 1
+          fi
+
+          # Show package info
+          echo "Package created successfully"
+          ls -lh dns-over-https_${DEB_VERSION}_${ARCH}.deb
+          dpkg -I dns-over-https_${DEB_VERSION}_${ARCH}.deb
+
+      - name: Test package contents
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          echo "=== Package Contents ==="
+          dpkg -c dns-over-https_${DEB_VERSION}_${ARCH}.deb
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dns-over-https-${{ matrix.arch }}
+          path: dns-over-https_*.deb
+          retention-days: 7
+
+  release:
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: |
+          DEB_VERSION=$(cat deb_version)
+          echo "version=${DEB_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Detect latest DNS-over-HTTPS version
+        id: doh
+        run: |
+          DOH_VERSION=$(curl -s https://api.github.com/repos/m13253/dns-over-https/releases/latest | grep tag_name | cut -d'"' -f4 | sed 's/^v//')
+          echo "version=${DOH_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release
+          find artifacts -name "dns-over-https_*.deb" -exec cp {} release/ \;
+          cd release
+          ls -lh
+          echo "=== Artifacts Ready for Release ==="
+          sha256sum dns-over-https_*.deb > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.version.outputs.version }}
+          name: DNS-over-HTTPS v${{ steps.version.outputs.version }}
+          body: |
+            DNS-over-HTTPS v${{ steps.doh.outputs.version }} Debian Package v${{ steps.version.outputs.version }}
+
+            ## Installation
+
+            ```bash
+            # Download the appropriate package for your architecture
+            wget https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/dns-over-https_${{ steps.version.outputs.version }}_amd64.deb
+
+            # Install
+            sudo apt install ./dns-over-https_${{ steps.version.outputs.version }}_amd64.deb
+            ```
+
+            ## Quick Start - Client
+
+            ```bash
+            # Disable systemd-resolved to free port 53
+            sudo doh-resolve disable
+
+            # Configure client (optional, defaults to Google/Cloudflare)
+            sudo nano /etc/dns-over-https/doh-client.conf
+
+            # Start and enable service
+            sudo systemctl start doh-client
+            sudo systemctl enable doh-client
+
+            # Test
+            dig @127.0.0.1 google.com
+            ```
+
+            ## Quick Start - Server
+
+            ```bash
+            # Configure server
+            sudo nano /etc/dns-over-https/doh-server.conf
+
+            # Start service
+            sudo systemctl start doh-server
+            sudo systemctl enable doh-server
+
+            # Configure reverse proxy (Apache/Nginx/Caddy) to forward /dns-query to localhost:8053
+            ```
+
+            ## Management
+
+            ```bash
+            doh-ctl client status    # Check client status
+            doh-ctl server status    # Check server status
+            doh-ctl test             # Test DNS resolution
+            doh-ctl client logs      # View logs
+            ```
+
+            ## Upstream Version
+
+            Built from DNS-over-HTTPS v${{ steps.doh.outputs.version }}
+
+            ## Verify Checksums
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+          artifacts: release/dns-over-https_*.deb,release/SHA256SUMS
+          draft: false
+          prerelease: false
+
+      - name: Release Summary
+        run: |
+          echo "✅ Release created successfully!"
+          echo ""
+          echo "Package Version: ${{ steps.version.outputs.version }}"
+          echo "DNS-over-HTTPS Version: ${{ steps.doh.outputs.version }}"
+          echo ""
+          echo "Artifacts:"
+          ls -lh release/dns-over-https_*.deb
+          echo ""
+          echo "Checksums:"
+          cat release/SHA256SUMS

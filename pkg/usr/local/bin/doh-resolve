@@ -1,0 +1,185 @@
+#!/bin/bash
+# doh-resolve - Manage systemd-resolved conflicts with DNS-over-HTTPS
+#
+# Usage:
+#   doh-resolve status      - Show current configuration
+#   doh-resolve check       - Check what's using port 53
+#   doh-resolve disable     - Disable systemd-resolved stub listener (free port 53)
+#   doh-resolve enable      - Re-enable systemd-resolved stub listener
+#   doh-resolve configure   - Interactive configuration wizard
+
+set -e
+
+RESOLVED_CONF="/etc/systemd/resolved.conf"
+
+show_help() {
+    grep "^# " "$0" | grep -v "^#!" | sed 's/^# *//'
+}
+
+require_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Error: This command requires root privileges"
+        exit 1
+    fi
+}
+
+check_port_53() {
+    echo "=== Checking Port 53 Usage ==="
+    echo ""
+    
+    if command -v ss &> /dev/null; then
+        echo "Processes listening on port 53:"
+        ss -tulpn | grep ':53 ' || echo "No processes found on port 53"
+    elif command -v netstat &> /dev/null; then
+        echo "Processes listening on port 53:"
+        netstat -tulpn | grep ':53 ' || echo "No processes found on port 53"
+    else
+        echo "Warning: Neither 'ss' nor 'netstat' found"
+        echo "Install net-tools or iproute2 package"
+    fi
+    
+    echo ""
+    if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+        echo "systemd-resolved is ACTIVE"
+    else
+        echo "systemd-resolved is INACTIVE"
+    fi
+}
+
+show_status() {
+    echo "=== systemd-resolved Configuration ==="
+    echo ""
+    
+    if [ -f "$RESOLVED_CONF" ]; then
+        echo "Configuration file: $RESOLVED_CONF"
+        echo ""
+        echo "Current settings:"
+        grep -E "^DNS=|^DNSStubListener=" "$RESOLVED_CONF" 2>/dev/null || echo "(Using defaults)"
+        echo ""
+    fi
+    
+    echo "Service status:"
+    systemctl status systemd-resolved --no-pager || true
+    echo ""
+    
+    check_port_53
+}
+
+disable_resolved() {
+    require_root
+    
+    echo "Disabling systemd-resolved stub listener..."
+    echo ""
+    
+    # Backup original config
+    if [ ! -f "${RESOLVED_CONF}.bak" ]; then
+        cp "$RESOLVED_CONF" "${RESOLVED_CONF}.bak"
+        echo "✓ Backed up original config to ${RESOLVED_CONF}.bak"
+    fi
+    
+    # Disable stub listener
+    if grep -q "^DNSStubListener=" "$RESOLVED_CONF"; then
+        sed -i 's/^DNSStubListener=.*/DNSStubListener=no/' "$RESOLVED_CONF"
+    else
+        if grep -q "^\[Resolve\]" "$RESOLVED_CONF"; then
+            sed -i '/^\[Resolve\]/a DNSStubListener=no' "$RESOLVED_CONF"
+        else
+            echo -e "\n[Resolve]\nDNSStubListener=no" >> "$RESOLVED_CONF"
+        fi
+    fi
+    
+    echo "✓ Set DNSStubListener=no in $RESOLVED_CONF"
+    
+    # Restart systemd-resolved
+    systemctl restart systemd-resolved
+    echo "✓ Restarted systemd-resolved"
+    
+    # Remove symlink if it exists
+    if [ -L /etc/resolv.conf ]; then
+        rm /etc/resolv.conf
+        echo "nameserver 127.0.0.1" > /etc/resolv.conf
+        echo "✓ Updated /etc/resolv.conf"
+    fi
+    
+    echo ""
+    echo "Port 53 is now available for DNS-over-HTTPS client"
+    echo "Start doh-client: sudo systemctl start doh-client"
+}
+
+enable_resolved() {
+    require_root
+    
+    echo "Re-enabling systemd-resolved stub listener..."
+    echo ""
+    
+    # Re-enable stub listener
+    if grep -q "^DNSStubListener=" "$RESOLVED_CONF"; then
+        sed -i 's/^DNSStubListener=.*/DNSStubListener=yes/' "$RESOLVED_CONF"
+    else
+        if grep -q "^\[Resolve\]" "$RESOLVED_CONF"; then
+            sed -i '/^\[Resolve\]/a DNSStubListener=yes' "$RESOLVED_CONF"
+        else
+            echo -e "\n[Resolve]\nDNSStubListener=yes" >> "$RESOLVED_CONF"
+        fi
+    fi
+    
+    echo "✓ Set DNSStubListener=yes in $RESOLVED_CONF"
+    
+    # Restart systemd-resolved
+    systemctl restart systemd-resolved
+    echo "✓ Restarted systemd-resolved"
+    
+    # Restore symlink
+    if [ ! -L /etc/resolv.conf ]; then
+        rm /etc/resolv.conf
+        ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+        echo "✓ Restored /etc/resolv.conf symlink"
+    fi
+    
+    echo ""
+    echo "systemd-resolved is now using port 53"
+}
+
+interactive_configure() {
+    require_root
+    
+    echo "==================================="
+    echo "DNS-over-HTTPS Configuration Wizard"
+    echo "==================================="
+    echo ""
+    
+    check_port_53
+    echo ""
+    
+    echo "Do you want to use DNS-over-HTTPS client on port 53?"
+    echo "This will disable systemd-resolved stub listener."
+    echo ""
+    read -p "Continue? [y/N] " -n 1 -r
+    echo
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        disable_resolved
+        echo ""
+        echo "Configuration complete!"
+        echo "Next steps:"
+        echo "  1. Configure doh-client: sudo nano /etc/dns-over-https/doh-client.conf"
+        echo "  2. Start service: sudo systemctl start doh-client"
+        echo "  3. Test: dig @127.0.0.1 google.com"
+    else
+        echo "Cancelled."
+        exit 0
+    fi
+}
+
+# Main command dispatcher
+case "${1:-}" in
+    status) show_status ;;
+    check) check_port_53 ;;
+    disable) disable_resolved ;;
+    enable) enable_resolved ;;
+    configure) interactive_configure ;;
+    help|--help|-h) show_help ;;
+    *) echo "Unknown command: ${1:-}"; show_help; exit 1 ;;
+esac
+
+exit 0

@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+# This script runs before the package is removed
+
+if [ "$1" = "remove" ]; then
+    echo "Stopping DNS-over-HTTPS services..."
+    
+    # Stop the services if they're running
+    if systemctl is-active --quiet doh-client 2>/dev/null; then
+        systemctl stop doh-client || true
+        echo "✓ doh-client service stopped"
+    fi
+    
+    if systemctl is-active --quiet doh-server 2>/dev/null; then
+        systemctl stop doh-server || true
+        echo "✓ doh-server service stopped"
+    fi
+    
+    # Disable the services
+    if systemctl is-enabled doh-client 2>/dev/null; then
+        systemctl disable doh-client || true
+        echo "✓ doh-client service disabled"
+    fi
+    
+    if systemctl is-enabled doh-server 2>/dev/null; then
+        systemctl disable doh-server || true
+        echo "✓ doh-server service disabled"
+    fi
+fi
+
+#DEBHELPER#
+exit 0

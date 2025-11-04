@@ -1,0 +1,142 @@
+#!/bin/bash
+set -e
+
+echo "===================================="
+echo "DNS-over-HTTPS Post-Installation"
+echo "===================================="
+
+# Determine if this is an upgrade or fresh install
+IS_UPGRADE=false
+OLD_VERSION=""
+if [ "$1" = "configure" ] && [ -n "$2" ]; then
+    IS_UPGRADE=true
+    OLD_VERSION="$2"
+    echo "Upgrading DNS-over-HTTPS from version $OLD_VERSION"
+fi
+
+# Check if services are currently running (before upgrade)
+CLIENT_WAS_RUNNING=false
+SERVER_WAS_RUNNING=false
+if systemctl is-active --quiet doh-client 2>/dev/null; then
+    CLIENT_WAS_RUNNING=true
+    echo "✓ doh-client service is currently running"
+fi
+if systemctl is-active --quiet doh-server 2>/dev/null; then
+    SERVER_WAS_RUNNING=true
+    echo "✓ doh-server service is currently running"
+fi
+
+# Create doh system user if it doesn't exist
+if ! id doh &>/dev/null; then
+    echo "Creating doh system user..."
+    useradd -r -s /usr/sbin/nologin doh || true
+else
+    echo "doh user already exists"
+fi
+
+# Set proper permissions on binaries
+if [ -f /usr/local/bin/doh-client ]; then
+    chmod 755 /usr/local/bin/doh-client
+    chown root:root /usr/local/bin/doh-client
+    echo "✓ doh-client binary permissions set"
+fi
+
+if [ -f /usr/local/bin/doh-server ]; then
+    chmod 755 /usr/local/bin/doh-server
+    chown root:root /usr/local/bin/doh-server
+    echo "✓ doh-server binary permissions set"
+fi
+
+# Create and configure doh directory
+mkdir -p /etc/dns-over-https
+chown doh:doh /etc/dns-over-https
+chmod 755 /etc/dns-over-https
+echo "✓ Configuration directory ready"
+
+# Set ownership for config files
+if [ -f /etc/dns-over-https/doh-client.conf ]; then
+    chown doh:doh /etc/dns-over-https/doh-client.conf
+    chmod 644 /etc/dns-over-https/doh-client.conf
+fi
+
+if [ -f /etc/dns-over-https/doh-server.conf ]; then
+    chown doh:doh /etc/dns-over-https/doh-server.conf
+    chmod 644 /etc/dns-over-https/doh-server.conf
+fi
+
+# Install systemd services
+if [ -f /etc/systemd/system/doh-client.service ]; then
+    systemctl daemon-reload
+    echo "✓ Systemd services installed"
+fi
+
+# Handle upgrade: restart only if services were running
+if [ "$IS_UPGRADE" = true ]; then
+    echo ""
+    echo "===================================="
+    echo "Upgrade Complete!"
+    echo "===================================="
+    
+    if [ "$CLIENT_WAS_RUNNING" = true ]; then
+        echo ""
+        echo "Restarting doh-client service (was running before upgrade)..."
+        systemctl restart doh-client
+        sleep 1
+        if systemctl is-active --quiet doh-client; then
+            echo "✓ doh-client service restarted successfully"
+        else
+            echo "✗ Warning: doh-client service failed to start"
+            echo "  Check status: sudo systemctl status doh-client"
+            echo "  Check logs: sudo journalctl -u doh-client -n 20"
+        fi
+    else
+        echo ""
+        echo "doh-client service remains stopped (was not running before upgrade)"
+        echo "Start when ready: sudo systemctl start doh-client"
+    fi
+    
+    if [ "$SERVER_WAS_RUNNING" = true ]; then
+        echo ""
+        echo "Restarting doh-server service (was running before upgrade)..."
+        systemctl restart doh-server
+        sleep 1
+        if systemctl is-active --quiet doh-server; then
+            echo "✓ doh-server service restarted successfully"
+        else
+            echo "✗ Warning: doh-server service failed to start"
+            echo "  Check status: sudo systemctl status doh-server"
+            echo "  Check logs: sudo journalctl -u doh-server -n 20"
+        fi
+    else
+        echo ""
+        echo "doh-server service remains stopped (was not running before upgrade)"
+        echo "Start when ready: sudo systemctl start doh-server"
+    fi
+else
+    # Fresh install
+    echo ""
+    echo "===================================="
+    echo "Installation Complete!"
+    echo "===================================="
+    echo ""
+    echo "Next steps:"
+    echo ""
+    echo "For DoH Client (local DNS proxy):"
+    echo "  1. Edit configuration: sudo nano /etc/dns-over-https/doh-client.conf"
+    echo "  2. Resolve port 53 conflict: sudo doh-ctl resolve disable"
+    echo "  3. Start service: sudo systemctl start doh-client"
+    echo "  4. Enable on boot: sudo systemctl enable doh-client"
+    echo "  5. Test: dig @127.0.0.1 google.com"
+    echo ""
+    echo "For DoH Server (HTTPS DNS endpoint):"
+    echo "  1. Edit configuration: sudo nano /etc/dns-over-https/doh-server.conf"
+    echo "  2. Configure reverse proxy (Apache/Nginx/Caddy)"
+    echo "  3. Start service: sudo systemctl start doh-server"
+    echo "  4. Enable on boot: sudo systemctl enable doh-server"
+    echo ""
+    echo "Quick start: doh-ctl help"
+    echo ""
+fi
+
+#DEBHELPER#
+exit 0

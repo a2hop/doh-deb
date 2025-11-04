@@ -1,0 +1,88 @@
+.TH DOH-RESOLVE 1 "November 2025" "dns-over-https 1.0.0" "User Commands"
+.SH NAME
+doh-resolve \- manage systemd-resolved conflicts with DNS-over-HTTPS
+.SH SYNOPSIS
+.B doh-resolve
+.I COMMAND
+.SH DESCRIPTION
+.B doh-resolve
+is a utility for managing port 53 conflicts between systemd-resolved and
+DNS-over-HTTPS client. It provides commands to disable or enable the
+systemd-resolved stub listener to free up port 53 for doh-client.
+.SH COMMANDS
+.TP
+.B status
+Show current systemd-resolved configuration and port 53 usage
+.TP
+.B check
+Check what process is currently using port 53
+.TP
+.B disable
+Disable systemd-resolved stub listener to free port 53 for doh-client (requires root)
+.TP
+.B enable
+Re-enable systemd-resolved stub listener (requires root)
+.TP
+.B configure
+Interactive configuration wizard (requires root)
+.TP
+.B help
+Display help message
+.SH EXAMPLES
+.PP
+Check current configuration:
+.RS
+doh-resolve status
+.RE
+.PP
+Disable systemd-resolved to use DNS-over-HTTPS:
+.RS
+sudo doh-resolve disable
+.RE
+.PP
+Re-enable systemd-resolved:
+.RS
+sudo doh-resolve enable
+.RE
+.PP
+Run interactive wizard:
+.RS
+sudo doh-resolve configure
+.RE
+.SH FILES
+.TP
+.I /etc/systemd/resolved.conf
+systemd-resolved configuration file
+.TP
+.I /etc/systemd/resolved.conf.bak
+Backup of original configuration (created on first disable)
+.TP
+.I /etc/resolv.conf
+System DNS resolver configuration
+.SH NOTES
+.PP
+When you disable systemd-resolved stub listener, the tool:
+.IP \(bu 2
+Sets DNSStubListener=no in /etc/systemd/resolved.conf
+.IP \(bu 2
+Restarts systemd-resolved service
+.IP \(bu 2
+Updates /etc/resolv.conf to point to 127.0.0.1
+.PP
+This frees port 53 for doh-client to use.
+.PP
+When you enable systemd-resolved stub listener, the tool:
+.IP \(bu 2
+Sets DNSStubListener=yes in /etc/systemd/resolved.conf
+.IP \(bu 2
+Restarts systemd-resolved service
+.IP \(bu 2
+Restores /etc/resolv.conf symlink
+.SH SEE ALSO
+.BR doh-ctl (1),
+.BR systemd-resolved (8),
+.BR resolved.conf (5)
+.PP
+Project homepage: https://github.com/m13253/dns-over-https
+.SH AUTHOR
+Package maintained by DNS-over-HTTPS Package Maintainer
