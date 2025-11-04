@@ -83,6 +83,9 @@ chmod 755 pkg/DEBIAN/postrm
 chmod 755 pkg/usr/local/bin/doh-ctl
 chmod 755 pkg/usr/local/bin/doh-resolve
 chmod 644 pkg/DEBIAN/control
+chmod 644 pkg/DEBIAN/conffiles
+chmod 644 pkg/etc/dns-over-https/*.conf
+chmod 644 pkg/etc/dns-over-https/*.example
 
 # Update version in control file
 sed -i "s/^Version: .*/Version: ${DEB_VERSION}/" pkg/DEBIAN/control

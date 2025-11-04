@@ -1,0 +1,5 @@
+/etc/dns-over-https/doh-client.conf
+/etc/dns-over-https/doh-server.conf
+/etc/dns-over-https/nginx.example
+/etc/dns-over-https/apache.example
+/etc/dns-over-https/caddy.example

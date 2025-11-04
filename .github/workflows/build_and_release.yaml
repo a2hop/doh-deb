@@ -150,8 +150,13 @@ jobs:
           chmod 755 pkg/usr/local/bin/doh-ctl
           chmod 755 pkg/usr/local/bin/doh-resolve
           
-          # Set permissions for control file
+          # Set permissions for control files
           chmod 644 pkg/DEBIAN/control
+          chmod 644 pkg/DEBIAN/conffiles
+          
+          # Set permissions for configuration files
+          chmod 644 pkg/etc/dns-over-https/*.conf
+          chmod 644 pkg/etc/dns-over-https/*.example
           
           echo "All permissions set correctly"
           ls -la pkg/DEBIAN/
@@ -236,66 +241,11 @@ jobs:
           tag: v${{ steps.version.outputs.version }}
           name: DNS-over-HTTPS v${{ steps.version.outputs.version }}
           body: |
-            DNS-over-HTTPS v${{ steps.doh.outputs.version }} Debian Package v${{ steps.version.outputs.version }}
-
-            ## Installation
-
-            ```bash
-            # Download the appropriate package for your architecture
-            wget https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/dns-over-https_${{ steps.version.outputs.version }}_amd64.deb
-
-            # Install
-            sudo apt install ./dns-over-https_${{ steps.version.outputs.version }}_amd64.deb
-            ```
-
-            ## Quick Start - Client
-
-            ```bash
-            # Disable systemd-resolved to free port 53
-            sudo doh-resolve disable
-
-            # Configure client (optional, defaults to Google/Cloudflare)
-            sudo nano /etc/dns-over-https/doh-client.conf
-
-            # Start and enable service
-            sudo systemctl start doh-client
-            sudo systemctl enable doh-client
-
-            # Test
-            dig @127.0.0.1 google.com
-            ```
-
-            ## Quick Start - Server
-
-            ```bash
-            # Configure server
-            sudo nano /etc/dns-over-https/doh-server.conf
-
-            # Start service
-            sudo systemctl start doh-server
-            sudo systemctl enable doh-server
-
-            # Configure reverse proxy (Apache/Nginx/Caddy) to forward /dns-query to localhost:8053
-            ```
-
-            ## Management
-
-            ```bash
-            doh-ctl client status    # Check client status
-            doh-ctl server status    # Check server status
-            doh-ctl test             # Test DNS resolution
-            doh-ctl client logs      # View logs
-            ```
-
-            ## Upstream Version
-
-            Built from DNS-over-HTTPS v${{ steps.doh.outputs.version }}
-
-            ## Verify Checksums
-
-            ```bash
-            sha256sum -c SHA256SUMS
-            ```
+            Debian package for DNS-over-HTTPS v${{ steps.doh.outputs.version }}
+            
+            **Install:** `sudo apt install ./dns-over-https_${{ steps.version.outputs.version }}_amd64.deb`
+            
+            **Verify:** `sha256sum -c SHA256SUMS`
           artifacts: release/dns-over-https_*.deb,release/SHA256SUMS
           draft: false
           prerelease: false

@@ -53,16 +53,14 @@ chown doh:doh /etc/dns-over-https
 chmod 755 /etc/dns-over-https
 echo "✓ Configuration directory ready"
 
-# Set ownership for config files
-if [ -f /etc/dns-over-https/doh-client.conf ]; then
-    chown doh:doh /etc/dns-over-https/doh-client.conf
-    chmod 644 /etc/dns-over-https/doh-client.conf
-fi
-
-if [ -f /etc/dns-over-https/doh-server.conf ]; then
-    chown doh:doh /etc/dns-over-https/doh-server.conf
-    chmod 644 /etc/dns-over-https/doh-server.conf
-fi
+# Set ownership for config files (they should be installed by dpkg via conffiles)
+for config_file in doh-client.conf doh-server.conf nginx.example apache.example caddy.example; do
+    if [ -f "/etc/dns-over-https/$config_file" ]; then
+        chown doh:doh "/etc/dns-over-https/$config_file"
+        chmod 644 "/etc/dns-over-https/$config_file"
+    fi
+done
+echo "✓ Configuration file permissions set"
 
 # Install systemd services
 if [ -f /etc/systemd/system/doh-client.service ]; then
