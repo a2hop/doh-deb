@@ -154,10 +154,6 @@ jobs:
           chmod 644 pkg/DEBIAN/control
           chmod 644 pkg/DEBIAN/conffiles
           
-          # Set permissions for configuration files
-          chmod 644 pkg/etc/dns-over-https/*.conf
-          chmod 644 pkg/etc/dns-over-https/*.example
-          
           echo "All permissions set correctly"
           ls -la pkg/DEBIAN/
 
